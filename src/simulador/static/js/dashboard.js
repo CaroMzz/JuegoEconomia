@@ -215,13 +215,13 @@ function renderTopHUD(state) {
   const utilStatusEl = document.getElementById("hud-utility-status");
 
   utilValEl.textContent = `${state.cumulative_utility.toFixed(1)} PTS`;
-  const utilPct = Math.min(Math.max((state.cumulative_utility / 200) * 100, 5), 100);
+  const utilPct = Math.min(Math.max((state.cumulative_utility / 400) * 100, 5), 100);
   utilBarEl.style.width = `${utilPct.toFixed(1)}%`;
 
-  if (state.cumulative_utility < 30) {
+  if (state.cumulative_utility < 100) {
     utilStatusEl.textContent = "Privacion Severa";
     utilStatusEl.className = "text-rose";
-  } else if (state.cumulative_utility < 90) {
+  } else if (state.cumulative_utility < 300) {
     utilStatusEl.textContent = "Equilibrio Moderado";
     utilStatusEl.className = "text-honey";
   } else {
@@ -236,8 +236,7 @@ function renderTopHUD(state) {
 
   const currentMonthName = state.month_name || state.current_month_name || "Marzo";
   document.getElementById("hud-month-text").textContent = `${currentMonthName} (Mes ${state.current_month} de ${state.total_months})`;
-  const inflPct = ((state.current_ipc - 1) * 100).toFixed(2);
-  document.getElementById("hud-ipc-text").textContent = `IPC: ${state.current_ipc.toFixed(4)}x (+${inflPct}%)`;
+  document.getElementById("hud-price-text").textContent = "Precios fijos";
 
   // Control visual del Modo Demo / Administrador
   const isDemo = Boolean(state.is_demo_mode);
@@ -712,7 +711,7 @@ async function renderFlowStep1Trivia() {
 
     container.innerHTML = `
       <div class="flow-question-prompt">
-        <span class="badge badge-sky" style="margin-bottom:0.5rem; display:inline-block;">${quiz.topic.toUpperCase()}</span>
+        <span class="badge badge-sky" style="margin-bottom:0.5rem; display:inline-block;">${quiz.topic.toUpperCase()} · DIFICULTAD ${quiz.difficulty.toUpperCase()}</span>
         <p>${quiz.question}</p>
       </div>
       <div id="trivia-options-stack" class="flow-options-grid"></div>
@@ -788,7 +787,7 @@ function renderFlowStep1AbsenceNotice(absenceMessage) {
   container.innerHTML = `
     <div style="background:var(--bg-card); padding:1.2rem; border-radius:12px; border:1px solid var(--border-subtle);">
       <span class="badge badge-rose" style="margin-bottom:0.5rem; display:inline-block;">Inasistencia Registrada</span>
-      <p style="font-size:0.95rem; line-height:1.5;">${absenceMessage || "Has decidido no asistir a trabajar en el dia de hoy. Se computara una falta y se descontaran $40.000,00 a fin de mes."}</p>
+      <p style="font-size:0.95rem; line-height:1.5;">${absenceMessage || "Has decidido no asistir a trabajar en el dia de hoy. Se computara una falta y se descontaran $66.666,67 a fin de mes."}</p>
       <p style="margin-top:0.6rem; color:var(--text-muted); font-size:0.85rem;">
         Las horas extras del dia quedan bloqueadas. Tu jornada continuara con opciones cotidianas adaptadas a un dia de permanencia y descanso en casa.
       </p>
@@ -1334,7 +1333,7 @@ async function selectFlowAbsentDinner(choice, cost, utility, dishName) {
   container.innerHTML = `
     <div style="background:var(--bg-card); padding:1.25rem; border-radius:12px; border:1px solid var(--border-subtle);">
       <h4 class="text-honey" style="margin-bottom:0.65rem; font-size:1.15rem;">Jornada de Ausencia Finalizada</h4>
-      <p>• Salario: <strong class="text-rose">-$40.000,00 descontados a fin de mes por inasistencia</strong></p>
+      <p>• Salario: <strong class="text-rose">-$66.666,67 descontados a fin de mes por inasistencia</strong></p>
       <p>• Puntos de bienestar acumulados en el dia: <strong class="text-purple">+${dailyFlowState.dailyUtilityGained} pts</strong></p>
       <p>• Ultimo debito (cena): <strong class="text-rose">-${formatCurrency(cost)}</strong>. ${remainingCash}</p>
       <p style="margin-top:0.6rem; color:var(--text-muted); font-size:0.85rem;">
@@ -1388,7 +1387,7 @@ async function recordMicroChoice(category, optionId, bonusUtility, cost = 0) {
 function confirmSkipDay() {
   showConfirmDialog(
     "Registrar Ausencia Laboral",
-    "¿Estas seguro de no ir a trabajar hoy? Se computara una falta y se descontaran $40.000,00 de tu liquidacion mensual. Sin embargo, tu dia continuara con las decisiones cotidianas habituales.",
+    "¿Estas seguro de no ir a trabajar hoy? Se computara una falta y se descontaran $66.666,67 de tu liquidacion mensual. Sin embargo, tu dia continuara con las decisiones cotidianas habituales.",
     async () => {
       try {
         const res = await fetch("/api/skip_day", { method: "POST" });
@@ -1604,14 +1603,14 @@ function showMonthSummaryModal(summary, isGameOver = false, finalEvaluation = nu
 
     <div class="summary-column-box">
       <h4 class="text-rose">Gastos y Balance Resultante</h4>
-      <p>• Costos fijos indexados: <strong>${formatCurrency(summary.total_fixed_cost)}</strong></p>
+      <p>• Costos fijos mensuales: <strong>${formatCurrency(summary.total_fixed_cost)}</strong></p>
       <p>• Estilo de vida y ocio: <strong>${formatCurrency(summary.total_discretionary_cost)}</strong></p>
       <p>• Contingencias e imprevistos: <strong>${formatCurrency(summary.total_unforeseen_cost)}</strong></p>
       <p>• Intereses bancarios (TEM): <strong class="text-rose">-${formatCurrency(summary.interest_applied)}</strong></p>
       <hr style="border:0; border-top:1px solid var(--border-subtle); margin:0.35rem 0;">
       <p>• Efectivo al cierre: <strong class="text-mint">${formatCurrency(summary.ending_cash)}</strong></p>
       <p>• Deuda bancaria resultante: <strong class="text-rose">${formatCurrency(summary.ending_debt)}</strong></p>
-      <p>• Proximo IPC estimado: <strong class="text-honey">${summary.next_ipc.toFixed(4)}x</strong></p>
+      <p>• Cambio de bienestar: <strong class="${summary.wellbeing_change >= 0 ? "text-purple" : "text-rose"}">${summary.wellbeing_change >= 0 ? "+" : ""}${summary.wellbeing_change.toFixed(1)} pts</strong></p>
     </div>
   `;
 
@@ -1704,9 +1703,9 @@ function showFinalEvaluationModal(evaluation) {
       <span class="fmc-sub">Gastos cotidianos y ocio</span>
     </div>
     <div class="final-metric-card">
-      <span class="fmc-label">Inflacion Acumulada</span>
-      <strong class="fmc-val text-honey">${evaluation.final_ipc.toFixed(4)}x</strong>
-      <span class="fmc-sub">+${evaluation.ipc_inflation_pct}% acumulado</span>
+      <span class="fmc-label">Bienestar Final</span>
+      <strong class="fmc-val text-honey">${evaluation.final_utility.toFixed(1)} pts</strong>
+      <span class="fmc-sub">Cambios por decisiones, faltas y deudas</span>
     </div>
   `;
 
@@ -1723,7 +1722,6 @@ function showFinalEvaluationModal(evaluation) {
         <tr>
           <th>Mes</th>
           <th>Nombre</th>
-          <th>IPC</th>
           <th>Asistencia</th>
           <th>Horas Extras</th>
           <th>Sueldo Devengado</th>
@@ -1740,7 +1738,6 @@ function showFinalEvaluationModal(evaluation) {
       <tr>
         <td>Mes ${m.month}</td>
         <td>${m.month_name || ''}</td>
-        <td>${m.ipc_month ? m.ipc_month.toFixed(4) + 'x' : '1.0000x'}</td>
         <td>${m.worked_days}/30</td>
         <td class="text-sky">+${formatCurrency(m.overtime_earned)}</td>
         <td class="text-mint">${formatCurrency(m.net_salary_liquidated)}</td>

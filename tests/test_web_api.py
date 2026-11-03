@@ -40,6 +40,7 @@ class TestFlaskWebAPI:
         assert data["days_per_month"] == 30
         assert data["worked_days"] == 0
         assert data["unworked_days"] == 0
+        assert data["cumulative_utility"] == 300.0
         assert "cash" in data
         assert "fixed_costs" in data
         assert "discretionary_choices" in data
@@ -53,7 +54,12 @@ class TestFlaskWebAPI:
         assert quiz_res.status_code == 200
         quiz = quiz_res.get_json()
         assert "question" in quiz
+        assert quiz["difficulty"] == "fácil"
         assert len(quiz["options"]) == 4
+
+        client.application.game.cumulative_utility = Decimal("99.0")
+        difficult_quiz = client.get("/api/work_quiz").get_json()
+        assert difficult_quiz["difficulty"] == "difícil"
 
         # 2. Responder pregunta
         answer_res = client.post("/api/work_quiz", json={"option_index": 1})

@@ -25,7 +25,7 @@
         <div class="gauge-card" id="gauge-cash-card">
           <div class="gauge-meta">
             <span class="gauge-title">PRESUPUESTO DISPONIBLE</span>
-            <span id="hud-cash-val" class="gauge-num text-mint">$1.200.000,00</span>
+            <span id="hud-cash-val" class="gauge-num text-mint">$1.500.000,00</span>
           </div>
           <div class="progress-track">
             <div id="hud-cash-bar" class="progress-fill fill-mint" style="width: 100%;"></div>
@@ -40,14 +40,14 @@
         <div class="gauge-card">
           <div class="gauge-meta">
             <span class="gauge-title">NIVEL DE BIENESTAR</span>
-            <span id="hud-utility-val" class="gauge-num text-purple">0.0 PTS</span>
+            <span id="hud-utility-val" class="gauge-num text-purple">300.0 PTS</span>
           </div>
           <div class="progress-track">
-            <div id="hud-utility-bar" class="progress-fill fill-purple" style="width: 10%;"></div>
+            <div id="hud-utility-bar" class="progress-fill fill-purple" style="width: 75%;"></div>
           </div>
           <div class="gauge-sub">
-            <span id="hud-utility-status" class="text-purple">Equilibrio Inicial</span>
-            <span class="text-dim">Satisfaccion</span>
+            <span id="hud-utility-status" class="text-purple">Confort Alto</span>
+            <span class="text-dim">Max. +6 por dia</span>
           </div>
         </div>
 
@@ -62,7 +62,7 @@
           </div>
           <div class="gauge-sub">
             <span id="hud-month-text" class="text-sky">Mes 1 de 6</span>
-            <span id="hud-ipc-text" class="text-honey">IPC: 1.0000x (+0.00%)</span>
+            <span id="hud-price-text" class="text-honey">Precios fijos</span>
           </div>
         </div>
       </div>
@@ -148,7 +148,7 @@
           <div class="actions-summary-box">
             <div class="summary-line">
               <span class="text-muted">Valor de la jornada:</span>
-              <strong class="text-mint">+$40.000,00</strong>
+              <strong class="text-mint">+$66.666,67</strong>
             </div>
             <div class="summary-line">
               <span class="text-muted">Sueldo acumulado hoy:</span>
@@ -208,7 +208,7 @@
           <div class="analytic-items-list">
             <div class="metric-row">
               <span class="text-muted">Salario Base Mensual</span>
-              <span id="metric-base-salary" class="metric-val">$1.200.000,00</span>
+              <span id="metric-base-salary" class="metric-val">$2.000.000,00</span>
             </div>
             <div class="metric-row">
               <span class="text-muted">Jornadas Asistidas</span>
@@ -246,7 +246,7 @@
             <h3 class="card-heading">Contratos Fijos (Recoleta)</h3>
             <span id="badge-total-fixed" class="badge badge-rose">Total: $0,00</span>
           </div>
-          <p class="card-caption">Gastos indispensables indexados mes a mes por la variacion del IPC.</p>
+          <p class="card-caption">Gastos mensuales nominales fijos durante los seis meses.</p>
           <ul id="fixed-costs-ul" class="fixed-items-list">
             <!-- Items fijos inyectados por JS -->
           </ul>
@@ -433,7 +433,7 @@
       </div>
       <div class="dialog-body">
         <p class="dialog-desc" style="margin-bottom:1rem;">
-          Este modulo carga una simulacion con los primeros 5 meses completados para el usuario <strong>prueba</strong> (acumulando sueldos percibidos, gastos reales e inflacion de IPC). Queda posicionado en el <strong>Dia 28 de Agosto (Mes 6 de 6)</strong>, permitiendo jugar las ultimas jornadas y presenciar el cierre y balance final de los 6 meses.
+          Este modulo carga una simulacion con los primeros 5 meses completados para el usuario <strong>prueba</strong> (acumulando sueldos y gastos). Queda posicionado en el <strong>Dia 28 de Agosto (Mes 6 de 6)</strong>, permitiendo jugar las ultimas jornadas y presenciar el cierre y balance final de los 6 meses.
         </p>
 
         <div class="admin-preview-grid">
@@ -454,18 +454,18 @@
           </div>
           <div class="admin-preview-card">
             <span class="preview-card-label">Saldo en Billetera</span>
-            <strong class="text-mint">~$2.200.000,00 ARS</strong>
-            <span class="preview-card-sub">Liquidez neta tras 5.9 meses</span>
+            <strong class="text-rose">$0,00 ARS</strong>
+            <span class="preview-card-sub">Deuda activa por gastos mensuales</span>
           </div>
           <div class="admin-preview-card">
             <span class="preview-card-label">Nivel de Bienestar</span>
-            <strong class="text-purple">~570.0 PTS</strong>
-            <span class="preview-card-sub">Satisfaccion semestral solida</span>
+            <strong class="text-purple">300.0 PTS</strong>
+            <span class="preview-card-sub">Bienestar inicial antes del historial</span>
           </div>
           <div class="admin-preview-card">
-            <span class="preview-card-label">Inflacion Acumulada</span>
-            <strong class="text-honey">~1.3059x (+30.59%)</strong>
-            <span class="preview-card-sub">IPC tras shock macroeconomico</span>
+            <span class="preview-card-label">Precios</span>
+            <strong class="text-honey">Fijos por semestre</strong>
+            <span class="preview-card-sub">Costos constantes durante la partida</span>
           </div>
         </div>
 

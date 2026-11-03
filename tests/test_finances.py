@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from simulador.economy import (
+    calculate_debt_wellbeing_penalty,
     calculate_tea,
     calculate_tem,
     apply_debt_interest,
@@ -75,3 +76,7 @@ class TestFinancialMath:
         interest_neg, total_neg = apply_debt_interest(Decimal("-500.00"), Decimal("0.05"))
         assert interest_neg == Decimal("0.00")
         assert total_neg == Decimal("0.00")
+
+    def test_debt_reduces_wellbeing_with_a_cap(self) -> None:
+        assert calculate_debt_wellbeing_penalty(Decimal("100000.00")) == Decimal("-20.0")
+        assert calculate_debt_wellbeing_penalty(Decimal("2000000.00")) == Decimal("-120.0")

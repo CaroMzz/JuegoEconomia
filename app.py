@@ -67,7 +67,8 @@ def create_app(test_config: dict = None) -> Flask:
             "id": quiz["id"],
             "topic": quiz["topic"],
             "question": quiz["question"],
-            "options": quiz["options"]
+            "options": quiz["options"],
+            "difficulty": quiz["difficulty"]
         }
         return jsonify(sanitized)
 

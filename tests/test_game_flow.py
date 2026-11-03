@@ -3,7 +3,6 @@
 from decimal import Decimal
 import pytest
 
-from simulador.economy import MacroEconomyEngine
 from simulador.game import (
     EconomicSurvivalGame,
     get_catalog_choices,
@@ -14,12 +13,8 @@ from simulador.models import Category, ConsumptionChoice
 class TestGameFlowAndConsumerTheory:
     """Valida la dinámica de los 6 turnos, el efecto sustitución y la solvencia."""
 
-    def test_frugal_strategy_survival(self) -> None:
-        """Estrategia de sustitución económica:
-        Elige siempre las alternativas de menor costo (Transporte público, cocinar en casa,
-        peluquería de barrio, alimento estándar).
-        Resultado esperado: No incurre en deuda, sobrevive los 6 meses con superávit de efectivo.
-        """
+    def test_frugal_strategy_accounts_for_realistic_fixed_costs(self) -> None:
+        """Las elecciones económicas permiten sobrevivir con precios fijos."""
         catalog = get_catalog_choices()
         economic_choices = [
             catalog[Category.TRANSPORT][1],      # Subte/Colectivo ($35.000)
@@ -28,27 +23,32 @@ class TestGameFlowAndConsumerTheory:
             catalog[Category.PETS][1],           # Alimento estándar ($45.000)
         ]
 
-        # Motor macroeconómico con semilla determinista
-        macro = MacroEconomyEngine(
-            base_monthly_inflation=Decimal("0.0300"),
-            shock_month=4,
-            shock_rate=Decimal("0.1200"),
-            seed=101
-        )
-        game = EconomicSurvivalGame(macro_engine=macro)
+        game = EconomicSurvivalGame()
 
+        first_result = None
         for month in range(1, 7):
             result = game.execute_turn(economic_choices)
             assert result.month == month
-            assert result.interest_applied == Decimal("0.00")
-            assert result.new_debt == Decimal("0.00")
-            assert result.ending_cash > Decimal("0.00")
+            if month == 1:
+                first_result = result
 
-        # Al cabo de 6 meses:
+        assert first_result is not None
+        assert first_result.total_fixed_cost == Decimal("1405000.00")
+        assert first_result.new_debt == Decimal("0.00")
+        assert game.history[1].salary_received == Decimal("2000000.00")
+
         assert game.state.month == 7
         assert game.state.debt == Decimal("0.00")
-        assert game.state.cash > Decimal("0.00")
         assert game.state.cumulative_utility > Decimal("0.0")
+
+    def test_initial_wellbeing_and_static_salary(self) -> None:
+        game = EconomicSurvivalGame()
+        assert game.state.cumulative_utility == Decimal("300.0")
+        assert game.state.cash == Decimal("1500000.00")
+
+        monthly_results = [game.execute_turn([]) for _ in range(6)]
+        assert all(result.salary_received == Decimal("2000000.00") for result in monthly_results)
+        assert all(result.fixed_costs == monthly_results[0].fixed_costs for result in monthly_results)
 
     def test_luxury_strategy_leads_to_debt_and_interest(self) -> None:
         """Estrategia suntuaria:
@@ -64,13 +64,10 @@ class TestGameFlowAndConsumerTheory:
             catalog[Category.PETS][0],           # Súper Premium + Vet ($90.000)
         ]
 
-        macro = MacroEconomyEngine(
-            base_monthly_inflation=Decimal("0.0400"),
-            shock_month=3,
-            shock_rate=Decimal("0.1500"),
-            seed=42
+        game = EconomicSurvivalGame(
+            initial_salary=Decimal("1700000.00"),
+            initial_cash=Decimal("0.00"),
         )
-        game = EconomicSurvivalGame(macro_engine=macro)
 
         has_incurred_debt = False
         interest_was_charged = False

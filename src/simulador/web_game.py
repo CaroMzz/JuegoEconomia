@@ -1,21 +1,31 @@
 """Motor de Simulacion Web del Calendario Mensual de 30 Dias.
 Gestiona asistencia laboral diaria, horas extras condicionales, arbol de consumo,
-gastos fijos obligatorios, eventos imprevistos de crisis, liquidacion determinista y ajuste por IPC.
+gastos fijos obligatorios, eventos imprevistos de crisis y liquidacion determinista.
 SIN EMOJIS - Diseno estructurado para videojuego de simulacion economica.
 """
 
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from simulador.economy import (
+    ABSENCE_WELLBEING_PENALTY,
+    BASE_AYSA,
+    BASE_EDESUR,
+    BASE_EXPENSES,
+    BASE_GAS,
+    BASE_GROCERIES,
+    BASE_GYM,
+    BASE_RENT_RECOLETA,
+    INITIAL_WELLBEING,
+    apply_wellbeing_change,
+    calculate_debt_wellbeing_penalty,
     calculate_tea,
     calculate_tem,
     apply_debt_interest,
-    apply_inflation,
-    round_currency,
-    MacroEconomyEngine
+    limit_daily_wellbeing_gain,
+    round_currency
 )
 from simulador.work_engine import (
     get_daily_question,
@@ -33,12 +43,9 @@ class DiscretionaryExpense:
     base_cost: Decimal
     utility: Decimal
     parent_id: Optional[str] = None
-    is_subject_to_ipc: bool = True
 
-    def calculate_cost(self, ipc_index: Decimal) -> Decimal:
-        if not self.is_subject_to_ipc:
-            return self.base_cost
-        return apply_inflation(self.base_cost, ipc_index)
+    def calculate_cost(self) -> Decimal:
+        return round_currency(self.base_cost)
 
 
 def get_default_discretionary_catalog() -> Dict[str, List[DiscretionaryExpense]]:
@@ -177,7 +184,7 @@ def get_default_discretionary_catalog() -> Dict[str, List[DiscretionaryExpense]]
                 category="mascotas",
                 name="Alimento Estandar y Paseos Caseros (Perro y Gato)",
                 description="Nutricion comercial regular y cuidados basicos en el hogar",
-                base_cost=Decimal("45000.00"),
+                base_cost=Decimal("85000.00"),
                 utility=Decimal("35.0")
             ),
             DiscretionaryExpense(
@@ -201,8 +208,8 @@ class EmergentUnforeseenEvent:
     base_cost: Decimal
     impact_utility: Decimal
 
-    def calculate_cost(self, ipc_index: Decimal) -> Decimal:
-        return apply_inflation(self.base_cost, ipc_index)
+    def calculate_cost(self) -> Decimal:
+        return round_currency(self.base_cost)
 
 
 POSSIBLE_UNFORESEEN_EVENTS = [
@@ -217,49 +224,49 @@ POSSIBLE_UNFORESEEN_EVENTS = [
         id="vet_mascota",
         title="Urgencia veterinaria de mascota (Perro y gato)",
         description="Atencion veterinaria de urgencia, ecografia y medicacion de guardia",
-        base_cost=Decimal("42000.00"),
+        base_cost=Decimal("180000.00"),
         impact_utility=Decimal("-25.0")
     ),
     EmergentUnforeseenEvent(
         id="auto_reparacion",
         title="Reparacion imprevista del auto / gomeria",
         description="Pinchadura en avenida, auxilio mecanico menor y alineacion",
-        base_cost=Decimal("55000.00"),
+        base_cost=Decimal("220000.00"),
         impact_utility=Decimal("-18.0")
     ),
     EmergentUnforeseenEvent(
         id="hogar_plomeria",
         title="Arreglo urgente de plomeria en el hogar",
         description="Rotura imprevista de flexible en bano y filtracion urgente",
-        base_cost=Decimal("46000.00"),
+        base_cost=Decimal("150000.00"),
         impact_utility=Decimal("-18.0")
     ),
     EmergentUnforeseenEvent(
         id="pantalla_celular",
         title="Rotura accidental de pantalla de smartphone",
         description="Modulo tactil astillado tras caida fortuita en la via publica",
-        base_cost=Decimal("49000.00"),
+        base_cost=Decimal("180000.00"),
         impact_utility=Decimal("-15.0")
     ),
     EmergentUnforeseenEvent(
         id="multa_transito",
         title="Notificacion de infraccion de transito en CABA",
         description="Multa imprevista por mal estacionamiento o fotomulta urbana",
-        base_cost=Decimal("32000.00"),
+        base_cost=Decimal("65000.00"),
         impact_utility=Decimal("-12.0")
     ),
     EmergentUnforeseenEvent(
         id="cerrajeria_urgente",
         title="Cerrajeria de urgencia en puerta principal",
         description="Cerradura trabada y cambio de perno de seguridad",
-        base_cost=Decimal("36000.00"),
+        base_cost=Decimal("100000.00"),
         impact_utility=Decimal("-14.0")
     ),
     EmergentUnforeseenEvent(
         id="humedad_hogar",
         title="Filtracion de humedad y pintura de emergencia",
         description="Impermeabilizacion urgente de pared medianera deteriorada",
-        base_cost=Decimal("44000.00"),
+        base_cost=Decimal("240000.00"),
         impact_utility=Decimal("-16.0")
     )
 ]
@@ -274,9 +281,8 @@ class WebEconomicGame:
 
     def __init__(
         self,
-        base_salary: Decimal = Decimal("1200000.00"),
+        base_salary: Decimal = Decimal("2000000.00"),
         tna: Decimal = Decimal("0.60"),
-        macro_engine: Optional[MacroEconomyEngine] = None,
         seed: Optional[int] = None
     ) -> None:
         self.base_salary = base_salary
@@ -284,7 +290,6 @@ class WebEconomicGame:
         self.tna = tna
         self.tem = calculate_tem(tna)
         self.tea = calculate_tea(self.tem)
-        self.macro_engine = macro_engine or MacroEconomyEngine(seed=seed)
         self.catalog = get_default_discretionary_catalog()
         self.rng = random.Random(seed)
 
@@ -293,10 +298,11 @@ class WebEconomicGame:
         self.is_demo_mode: bool = False
         self.current_month: int = 1
         self.current_day: int = 1
-        self.cash: Decimal = Decimal("1200000.00")  # Saldo inicial liquido
+        self.cash: Decimal = Decimal("1500000.00")
         self.debt: Decimal = Decimal("0.00")
-        self.cumulative_utility: Decimal = Decimal("0.0")
-        self.current_ipc: Decimal = Decimal("1.0000")
+        self.cumulative_utility: Decimal = INITIAL_WELLBEING
+        self.monthly_wellbeing_change = Decimal("0.0")
+        self.daily_wellbeing_gain = Decimal("0.0")
 
         # Gasto discrecional acumulado debitado en tiempo real este mes
         self.discretionary_spent_this_month: Decimal = Decimal("0.00")
@@ -356,15 +362,16 @@ class WebEconomicGame:
     @property
     def projected_salary(self) -> Decimal:
         """Salario devengado proyectado por asistencia efectiva."""
-        return (Decimal(self.worked_days_count) * self.daily_salary).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
+        return self._salary_for_days(self.worked_days_count)
 
     @property
     def projected_absence_deduction(self) -> Decimal:
         """Monto proyectado a descontar por dias de inasistencia."""
-        return (Decimal(self.unworked_days_count) * self.daily_salary).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
+        return self._salary_for_days(self.unworked_days_count)
+
+    def _salary_for_days(self, days: int) -> Decimal:
+        return round_currency(
+            self.base_salary * Decimal(days) / Decimal(self.DAYS_PER_MONTH)
         )
 
     @property
@@ -380,35 +387,45 @@ class WebEconomicGame:
         return (self.attendance.get(self.current_day) is True)
 
     def get_fixed_costs_breakdown(self) -> Dict[str, Decimal]:
-        """Calcula los gastos fijos obligatorios del mes ajustados por el IPC actual.
-        Tope y calibracion inicial exacta de $620.000 ARS:
-        - Alquiler en Recoleta: $370.000,00
-        - Expensas: $60.000,00
-        - Luz (Edesur): $30.000,00
-        - Agua (AySA): $20.000,00
-        - Gas (Metrogas): $10.000,00
-        - Membresia Platino Plus en Megatlon: $50.000,00
-        - Canasta basica indispensable: $80.000,00
-        Total base a IPC 1.0000 = $620.000,00 ARS exactos.
-        """
-        ipc = self.current_ipc
+        """Calcula los gastos fijos mensuales nominales."""
         return {
-            "Alquiler (Recoleta)": apply_inflation(Decimal("370000.00"), ipc),
-            "Expensas": apply_inflation(Decimal("60000.00"), ipc),
-            "Luz (Edesur)": apply_inflation(Decimal("30000.00"), ipc),
-            "Agua (AySA)": apply_inflation(Decimal("20000.00"), ipc),
-            "Gas (Metrogas)": apply_inflation(Decimal("10000.00"), ipc),
-            "Gimnasio (Megatlon Platino Plus)": apply_inflation(Decimal("50000.00"), ipc),
-            "Comida basica indispensable": apply_inflation(Decimal("80000.00"), ipc),
+            "Alquiler (Recoleta)": BASE_RENT_RECOLETA,
+            "Expensas": BASE_EXPENSES,
+            "Luz (Edesur)": BASE_EDESUR,
+            "Agua (AySA)": BASE_AYSA,
+            "Gas (Metrogas)": BASE_GAS,
+            "Gimnasio (Megatlon Platino Plus)": BASE_GYM,
+            "Comida basica indispensable": BASE_GROCERIES,
         }
 
     def get_total_fixed_costs(self) -> Decimal:
-        """Suma total de gastos fijos obligatorios (exactamente $620.000 ARS a IPC base)."""
+        """Suma total de gastos fijos obligatorios."""
         return sum(self.get_fixed_costs_breakdown().values(), Decimal("0.00"))
 
     def get_daily_quiz(self) -> Dict[str, Any]:
         """Retorna la pregunta de jornada laboral del dia actual."""
-        return get_daily_question(self.current_day, self.current_month)
+        return get_daily_question(
+            self.current_day,
+            self.current_month,
+            self.cumulative_utility
+        )
+
+    def _apply_wellbeing_change(self, change: Decimal) -> Decimal:
+        if change > Decimal("0.0"):
+            change = limit_daily_wellbeing_gain(change, self.daily_wellbeing_gain)
+        self.cumulative_utility, applied_change = apply_wellbeing_change(
+            self.cumulative_utility,
+            change
+        )
+        if applied_change > Decimal("0.0"):
+            self.daily_wellbeing_gain += applied_change
+        self.monthly_wellbeing_change += applied_change
+        return applied_change
+
+    def _record_absence(self, day: int) -> None:
+        if day not in self.attendance:
+            self.attendance[day] = False
+            self._apply_wellbeing_change(-ABSENCE_WELLBEING_PENALTY)
 
     def _pick_unforeseen_event(self) -> EmergentUnforeseenEvent:
         """Selecciona un evento imprevisto aplicando cooldown para evitar repeticiones consecutivas o recientes."""
@@ -437,8 +454,8 @@ class WebEconomicGame:
         reward = self.daily_salary
 
         # Bono de utilidad por rendimiento
-        utility_bonus = Decimal("10.0") if is_correct else Decimal("2.0")
-        self.cumulative_utility += utility_bonus
+        utility_bonus = Decimal("2.0") if is_correct else Decimal("-2.0")
+        self._apply_wellbeing_change(utility_bonus)
 
         # Ocurrencia eventual de crisis / imprevisto (probabilidad 12%)
         crisis_info = None
@@ -466,7 +483,7 @@ class WebEconomicGame:
         if self.current_day in self.attendance:
             return {"error": "El dia ya fue registrado."}
 
-        self.attendance[self.current_day] = False
+        self._record_absence(self.current_day)
         deduction = self.daily_salary
 
         crisis_info = None
@@ -486,7 +503,7 @@ class WebEconomicGame:
 
     def _trigger_crisis_event(self, event: EmergentUnforeseenEvent) -> Dict[str, Any]:
         """Activa una crisis financiera emergente que requiere decision inmediata."""
-        cost = event.calculate_cost(self.current_ipc)
+        cost = event.calculate_cost()
         finance_cost = (cost * Decimal("1.15")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         crisis_data = {
             "id": event.id,
@@ -520,7 +537,7 @@ class WebEconomicGame:
             self.cash = Decimal("0.00")
             self.debt += diff
 
-        self.cumulative_utility += utility_impact
+        self._apply_wellbeing_change(utility_impact)
 
         # Registrar en la lista de imprevistos afrontados este mes
         resolved_event = EmergentUnforeseenEvent(
@@ -546,10 +563,11 @@ class WebEconomicGame:
         """Avanza al siguiente dia del calendario (hasta el dia 30)."""
         if self.current_day not in self.attendance:
             # Si no jugo ni salteo explicitamente, se computa como ausencia automatica
-            self.attendance[self.current_day] = False
+            self._record_absence(self.current_day)
 
         if self.current_day < self.DAYS_PER_MONTH:
             self.current_day += 1
+            self.daily_wellbeing_gain = Decimal("0.0")
             return {
                 "success": True,
                 "current_day": self.current_day,
@@ -571,7 +589,6 @@ class WebEconomicGame:
 
         fixed = self.get_fixed_costs_breakdown()
         challenge = generate_live_overtime_challenge(
-            current_ipc=self.current_ipc,
             tna=self.tna,
             tem=self.tem,
             edesur_cost=fixed["Luz (Edesur)"],
@@ -598,10 +615,10 @@ class WebEconomicGame:
         self.overtime_done_today[self.current_day] = True
 
         if is_correct:
-            self.cumulative_utility += Decimal("15.0")
+            self._apply_wellbeing_change(Decimal("5.0"))
             msg = f"Formula resuelta con exito. Ganaste ${reward:,.2f} en concepto de horas extras."
         else:
-            self.cumulative_utility += Decimal("5.0")
+            self._apply_wellbeing_change(Decimal("1.0"))
             msg = f"Actividad de horas extras completada (+${reward:,.2f} acreditados al sueldo). Explicacion de la formula: {challenge['explanation']}"
 
         self.active_overtime_challenge = None
@@ -626,8 +643,7 @@ class WebEconomicGame:
         if category and option_id:
             self.set_discretionary_choice(category, option_id)
 
-        # Aplicar inflacion al costo individual
-        cost_indexed = apply_inflation(cost, self.current_ipc) if cost > Decimal("0.00") else Decimal("0.00")
+        cost_indexed = round_currency(cost) if cost > Decimal("0.00") else Decimal("0.00")
 
         if cost_indexed > Decimal("0.00"):
             self.discretionary_spent_this_month += cost_indexed
@@ -638,7 +654,7 @@ class WebEconomicGame:
                 self.cash = Decimal("0.00")
                 self.debt += diff
 
-        self.cumulative_utility += bonus_utility
+        self._apply_wellbeing_change(bonus_utility)
 
         return {
             "success": True,
@@ -665,14 +681,14 @@ class WebEconomicGame:
         # Completar dias restantes si no se jugaron
         for day in range(1, self.DAYS_PER_MONTH + 1):
             if day not in self.attendance:
-                self.attendance[day] = False
+                self._record_absence(day)
 
         worked = self.worked_days_count
         unworked = self.unworked_days_count
 
         # 1. Liquidacion de Salario
-        base_earned = (Decimal(worked) * self.daily_salary).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        absence_deduction = (Decimal(unworked) * self.daily_salary).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        base_earned = self._salary_for_days(worked)
+        absence_deduction = self._salary_for_days(unworked)
         overtime_earned = self.overtime_bonus_accumulated
         net_salary_liquidated = base_earned + overtime_earned
 
@@ -694,9 +710,9 @@ class WebEconomicGame:
             if cat in self.catalog:
                 for opt in self.catalog[cat]:
                     if opt.id == opt_id:
-                        cost = opt.calculate_cost(self.current_ipc)
+                        cost = opt.calculate_cost()
                         discretionary_costs[opt.name] = cost
-                        discretionary_utility += opt.utility
+                        discretionary_utility += opt.utility / Decimal("10")
 
         if self.discretionary_spent_this_month > Decimal("0.00"):
             # Si el jugador realizo consumos diarios en tiempo real, ya fueron debitados de la billetera.
@@ -706,12 +722,12 @@ class WebEconomicGame:
             # Caso sin decisiones en tiempo real (ej. ejecucion directa de liquidacion mensual):
             total_discretionary = sum(discretionary_costs.values(), Decimal("0.00"))
             available_cash -= total_discretionary
-            self.cumulative_utility += discretionary_utility
+            self._apply_wellbeing_change(discretionary_utility)
 
         # 6. Pago de Gastos Imprevistos
         unforeseen_costs: Dict[str, Decimal] = {}
         for ev in self.current_month_unforeseen:
-            cost = ev.calculate_cost(self.current_ipc)
+            cost = ev.calculate_cost()
             unforeseen_costs[ev.title] = cost
             # Notar que los imprevistos ya se debitaron inmediatamente en resolve_crisis_decision()
             # por lo que no se debitan nuevamente de available_cash.
@@ -738,11 +754,9 @@ class WebEconomicGame:
 
         self.cash = round_currency(ending_cash)
         self.debt = round_currency(ending_debt)
-
-        # 8. Actualizar Macroeconomia e IPC
-        inflation_rate, next_ipc = self.macro_engine.advance_month(self.current_month + 1)
-        prev_ipc = self.current_ipc
-        self.current_ipc = next_ipc
+        debt_wellbeing_penalty = calculate_debt_wellbeing_penalty(self.debt)
+        self._apply_wellbeing_change(debt_wellbeing_penalty)
+        wellbeing_change = self.monthly_wellbeing_change
 
         summary = {
             "month": self.current_month,
@@ -763,11 +777,10 @@ class WebEconomicGame:
             "ending_cash": self.cash,
             "ending_debt": self.debt,
             "net_worth": self.net_worth,
-            "utility_earned_this_month": discretionary_utility,
+            "utility_earned_this_month": wellbeing_change,
+            "wellbeing_change": wellbeing_change,
+            "debt_wellbeing_penalty": debt_wellbeing_penalty,
             "cumulative_utility": self.cumulative_utility,
-            "ipc_month": prev_ipc,
-            "next_ipc": next_ipc,
-            "inflation_shock_rate": inflation_rate
         }
 
         self.month_history.append(summary)
@@ -780,6 +793,8 @@ class WebEconomicGame:
         self.overtime_challenges_completed = 0
         self.overtime_done_today = {}
         self.current_month_unforeseen = []
+        self.daily_wellbeing_gain = Decimal("0.0")
+        self.monthly_wellbeing_change = Decimal("0.0")
         self.active_crisis = None
         self.discretionary_spent_this_month = Decimal("0.00")
         self.transit_strike_occurred_this_month = False
@@ -801,7 +816,7 @@ class WebEconomicGame:
                             "id": opt.id,
                             "name": opt.name,
                             "description": opt.description,
-                            "cost": opt.calculate_cost(self.current_ipc),
+                            "cost": opt.calculate_cost(),
                             "utility": opt.utility,
                             "parent_id": opt.parent_id
                         }
@@ -814,7 +829,7 @@ class WebEconomicGame:
                     "id": o.id,
                     "name": o.name,
                     "description": o.description,
-                    "cost": o.calculate_cost(self.current_ipc),
+                    "cost": o.calculate_cost(),
                     "utility": o.utility,
                     "parent_id": o.parent_id
                 }
@@ -854,7 +869,6 @@ class WebEconomicGame:
             "tna": self.tna,
             "tem": self.tem,
             "tea": self.tea,
-            "current_ipc": self.current_ipc,
             "fixed_costs": fixed,
             "total_fixed_costs": self.get_total_fixed_costs(),
             "attendance_calendar": {str(d): self.attendance.get(d) for d in range(1, self.DAYS_PER_MONTH + 1)},
@@ -863,7 +877,7 @@ class WebEconomicGame:
                 {
                     "title": ev.title,
                     "description": ev.description,
-                    "cost": ev.calculate_cost(self.current_ipc)
+                    "cost": ev.calculate_cost()
                 }
                 for ev in self.current_month_unforeseen
             ],
@@ -917,7 +931,7 @@ class WebEconomicGame:
         if self.debt == Decimal("0.00"):
             verdict_text = (
                 f"Has completado con exito la simulacion de 6 meses para el perfil '{self.username}'. "
-                "Lograste administrar tu restriccion presupuestaria frente a los shocks de inflacion y los costos "
+                "Lograste administrar tu restriccion presupuestaria frente a los costos "
                 "fijos obligatorios en Recoleta sin caer en descubierto bancario ni incurrir en intereses financieros. "
                 "Aplicaste de forma eficiente el efecto sustitucion en bienes cotidianos (optando por alternativas "
                 "economicas en momentos de restriccion), lo que permitio resguardar tu liquidez y maximizar "
@@ -927,11 +941,9 @@ class WebEconomicGame:
             verdict_text = (
                 f"Finalizaste el semestre para el perfil '{self.username}' con una deuda bancaria de "
                 f"${self.debt:,.2f}. La tasa de interes mensual (TEM) genero un costo de oportunidad severo "
-                "sobre tu ingreso disponible. La falta de sustitucion de bienes y el impacto inflacionario sobre "
+                "sobre tu ingreso disponible. La falta de sustitucion de bienes y el peso de los gastos fijos "
                 "la canasta de consumo sobrepasaron tu restriccion presupuestaria."
             )
-
-        ipc_pct = ((self.current_ipc - Decimal("1.0000")) * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         return {
             "total_months": total_months_played,
@@ -948,8 +960,6 @@ class WebEconomicGame:
             "final_debt": self.debt,
             "final_net_worth": self.net_worth,
             "final_utility": self.cumulative_utility,
-            "final_ipc": self.current_ipc,
-            "ipc_inflation_pct": ipc_pct,
             "status_code": status_code,
             "status_title": status_title,
             "status_badge_class": status_badge_class,
@@ -961,7 +971,7 @@ class WebEconomicGame:
 def create_demo_game_day_28(seed: Optional[int] = 42) -> WebEconomicGame:
     """Crea una partida precargada y coherente en el Dia 28 de Agosto (Mes 6 de 6).
     Simula el avance historico de los primeros 5 meses completos (Mes 1 al 5)
-    para el usuario 'prueba', acumulando salarios, gastos e inflacion por IPC.
+    para el usuario 'prueba', acumulando salarios y gastos.
     Permite demostrar en vivo los ultimos 2 dias del semestre (dias 28, 29 y 30)
     y el cierre y balance global consolidado de los 6 meses sin alterar la partida estandar.
     """
@@ -969,11 +979,23 @@ def create_demo_game_day_28(seed: Optional[int] = 42) -> WebEconomicGame:
     game.is_demo_mode = True
     game.username = "prueba"
 
+    def debit_demo_expense(amount: Decimal) -> None:
+        if game.cash >= amount:
+            game.cash -= amount
+        else:
+            game.debt = round_currency(game.debt + amount - game.cash)
+            game.cash = Decimal("0.00")
+
     # 1. Simular el avance historico de los primeros 5 meses (Mes 1 a 5)
     for m in range(1, 6):
         # Asistencias regulares: 26 dias trabajados y 4 ausencias por mes
         for d in range(1, 31):
-            game.attendance[d] = (d not in (7, 14, 21, 28))
+            game.daily_wellbeing_gain = Decimal("0.0")
+            if d in (7, 14, 21, 28):
+                game._record_absence(d)
+            else:
+                game.attendance[d] = True
+                game._apply_wellbeing_change(Decimal("1.0"))
 
         # 3 horas extras completadas por mes (dias 4, 11 y 18)
         game.overtime_done_today = {}
@@ -983,12 +1005,12 @@ def create_demo_game_day_28(seed: Optional[int] = 42) -> WebEconomicGame:
         game.overtime_bonus_accumulated = Decimal("105000.00")
 
         # Gasto discrecional mensual indexado
-        disc_spent = Decimal("720000.00") + Decimal(str((m - 1) * 35000))
+        disc_spent = Decimal("180000.00")
         game.discretionary_spent_this_month = disc_spent
-        game.cumulative_utility += Decimal("95.0")
+        debit_demo_expense(disc_spent)
 
         # 1 evento imprevisto por mes
-        ev_cost = apply_inflation(Decimal("45000.00"), game.current_ipc)
+        ev_cost = Decimal("85000.00")
         ev = EmergentUnforeseenEvent(
             id=f"crisis_m{m}",
             title=f"Gasto imprevisto Mes {m}",
@@ -997,7 +1019,8 @@ def create_demo_game_day_28(seed: Optional[int] = 42) -> WebEconomicGame:
             impact_utility=Decimal("-15.0")
         )
         game.current_month_unforeseen.append(ev)
-        game.cash -= ev_cost
+        debit_demo_expense(ev_cost)
+        game._apply_wellbeing_change(ev.impact_utility)
 
         # Cierre del mes historico
         game.close_month()
@@ -1006,10 +1029,12 @@ def create_demo_game_day_28(seed: Optional[int] = 42) -> WebEconomicGame:
     game.current_day = 28
     game.attendance = {}
     for d in range(1, 28):
+        game.daily_wellbeing_gain = Decimal("0.0")
         if d in (7, 14, 21):
-            game.attendance[d] = False
+            game._record_absence(d)
         else:
             game.attendance[d] = True
+            game._apply_wellbeing_change(Decimal("1.0"))
 
     # 3 desafios de horas extras completados en el Mes 6 (dias 4, 11 y 18)
     game.overtime_done_today = {}
@@ -1019,12 +1044,12 @@ def create_demo_game_day_28(seed: Optional[int] = 42) -> WebEconomicGame:
     game.overtime_bonus_accumulated = Decimal("105000.00")
 
     # Consumo de estilo de vida debitado en tiempo real en los 27 dias de Agosto
-    month_6_disc_spent = Decimal("880000.00")
+    month_6_disc_spent = Decimal("180000.00")
     game.discretionary_spent_this_month = month_6_disc_spent
-    game.cash -= month_6_disc_spent
+    debit_demo_expense(month_6_disc_spent)
 
     # 1 Imprevisto resuelto en el Mes 6
-    m6_crisis_cost = apply_inflation(Decimal("45000.00"), game.current_ipc)
+    m6_crisis_cost = Decimal("85000.00")
     m6_crisis = EmergentUnforeseenEvent(
         id="med_consulta_m6",
         title="Consulta medica de guardia y farmacia (Contado)",
@@ -1034,10 +1059,8 @@ def create_demo_game_day_28(seed: Optional[int] = 42) -> WebEconomicGame:
     )
     game.current_month_unforeseen.append(m6_crisis)
     game.recent_crisis_ids.append("med_consulta_m6")
-    game.cash -= m6_crisis_cost
-
-    # Bienestar acumulado de los primeros 27 dias de Agosto
-    game.cumulative_utility += Decimal("95.0")
+    debit_demo_expense(m6_crisis_cost)
+    game._apply_wellbeing_change(m6_crisis.impact_utility)
 
     # Paro de transporte ya acontecido en el Mes 6
     game.transit_strike_occurred_this_month = True

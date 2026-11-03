@@ -7,6 +7,8 @@ from decimal import Decimal, ROUND_HALF_UP
 import random
 from typing import Any, Dict, List, Optional
 
+from simulador.economy import INITIAL_WELLBEING
+
 
 QUESTIONS_BANK: List[Dict[str, Any]] = [
     {
@@ -37,16 +39,16 @@ QUESTIONS_BANK: List[Dict[str, Any]] = [
     },
     {
         "id": 3,
-        "topic": "Macroeconomía",
-        "question": "¿Qué mide el Índice de Precios al Consumidor (IPC)?",
+        "topic": "Finanzas Personales",
+        "question": "¿Qué conviene hacer cuando los gastos planificados superan el ingreso disponible?",
         "options": [
-            "La variación del precio del dólar oficial.",
-            "La evolución promedio de los precios de una canasta ponderada de bienes y servicios representativa de los hogares.",
-            "El nivel total de reservas internacionales del Banco Central.",
-            "El crecimiento del Producto Bruto Interno per cápita."
+            "Usar crédito sin revisar la capacidad de pago.",
+            "Priorizar gastos necesarios y ajustar o postergar los gastos discrecionales.",
+            "Ignorar el déficit hasta el siguiente mes.",
+            "Aumentar todos los gastos para aprovechar el ingreso."
         ],
         "correct_index": 1,
-        "explanation": "El IPC mide la variación promedio de precios de una canasta de consumo típica entre dos períodos de tiempo."
+        "explanation": "Un presupuesto sostenible prioriza necesidades y ajusta los gastos discrecionales para no gastar por encima del ingreso."
     },
     {
         "id": 4,
@@ -115,16 +117,16 @@ QUESTIONS_BANK: List[Dict[str, Any]] = [
     },
     {
         "id": 9,
-        "topic": "Macroeconomía",
-        "question": "¿Qué sucede con el poder adquisitivo del salario si la inflación mensual supera el aumento del sueldo?",
+        "topic": "Finanzas Personales",
+        "question": "¿Qué efecto tiene una ausencia laboral sobre el presupuesto mensual de esta partida?",
         "options": [
-            "El salario real se reduce (se pueden adquirir menos bienes y servicios).",
-            "El salario real aumenta por efecto riqueza.",
-            "No sufre modificaciones porque los precios nominales no afectan el consumo.",
-            "El consumidor automáticamente duplica su ahorro en moneda local."
+            "Reduce el salario liquidado y deja menos dinero disponible para otros gastos.",
+            "Aumenta el salario porque se trabajan menos días.",
+            "No modifica el ingreso ni el bienestar.",
+            "El empleador cubre automáticamente todos los gastos fijos."
         ],
         "correct_index": 0,
-        "explanation": "El salario real es el salario nominal deflactado por precios: si los precios suben más rápido que el sueldo, el poder adquisitivo cae."
+        "explanation": "Cada ausencia descuenta salario y reduce el ingreso disponible para cubrir gastos y decisiones de consumo."
     },
     {
         "id": 10,
@@ -132,12 +134,12 @@ QUESTIONS_BANK: List[Dict[str, Any]] = [
         "question": "¿Qué concepto describe la tendencia a gastar más dinero cuando se perciben ingresos adicionales en lugar de destinarlos a un fondo de reserva?",
         "options": [
             "Aversión al riesgo.",
-            "Propensión marginal al consumo elevada o 'inflación del estilo de vida'.",
+            "Preferencia por el consumo inmediato sin reservar una parte para el ahorro.",
             "Paradoja de la frugalidad.",
             "Trampa de liquidez keynesiana."
         ],
         "correct_index": 1,
-        "explanation": "El fenómeno de expandir los gastos de ocio y suntuarios a medida que el ingreso se incrementa se conoce como inflación del estilo de vida."
+        "explanation": "Planificar el ahorro antes de decidir gastos discrecionales ayuda a evitar que un ingreso extra se consuma por completo."
     },
     {
         "id": 11,
@@ -167,16 +169,16 @@ QUESTIONS_BANK: List[Dict[str, Any]] = [
     },
     {
         "id": 13,
-        "topic": "Macroeconomía",
-        "question": "¿Qué es la 'Inflación Núcleo' (Core Inflation)?",
+        "topic": "Finanzas Personales",
+        "question": "¿Qué caracteriza a un gasto discrecional?",
         "options": [
-            "El índice que solo mide el precio del oro y metales preciosos.",
-            "La medición que excluye bienes y servicios con precios volátiles (estacionales o regulados como tarifas) para ver la tendencia de fondo.",
-            "La inflación total del sector primario de la economía.",
-            "El aumento de precios registrado exclusivamente en compras mayoristas."
+            "Es un gasto obligatorio que no se puede evitar, como el alquiler.",
+            "Es un gasto que puede reducirse o postergarse, como una salida o un delivery.",
+            "Es un ingreso que se recibe una sola vez al año.",
+            "Es una deuda que no genera intereses."
         ],
         "correct_index": 1,
-        "explanation": "La inflación núcleo despeja shocks transitorios (precios regulados y estacionales) para evaluar la dinámica inflacionaria estructural."
+        "explanation": "Los gastos discrecionales permiten elegir cuánto gastar y pueden ajustarse cuando el presupuesto es limitado."
     },
     {
         "id": 14,
@@ -207,16 +209,33 @@ QUESTIONS_BANK: List[Dict[str, Any]] = [
 ]
 
 
-def get_daily_question(day: int, month: int) -> Dict[str, Any]:
-    """Retorna la pregunta del día de forma determinista para el calendario."""
-    total_q = len(QUESTIONS_BANK)
-    # Generar un índice determinista basado en mes y día
-    idx = ((month - 1) * 30 + (day - 1)) % total_q
-    return QUESTIONS_BANK[idx]
+def get_daily_question(
+    day: int,
+    month: int,
+    cumulative_utility: Decimal = INITIAL_WELLBEING
+) -> Dict[str, Any]:
+    """Selecciona preguntas más difíciles cuando el bienestar acumulado es bajo."""
+    if cumulative_utility < Decimal("100.0"):
+        difficulty = "difícil"
+        question_ids = range(11, 16)
+    elif cumulative_utility < Decimal("300.0"):
+        difficulty = "intermedia"
+        question_ids = range(6, 11)
+    else:
+        difficulty = "fácil"
+        question_ids = range(1, 6)
+
+    eligible_questions = [
+        question for question in QUESTIONS_BANK
+        if question["id"] in question_ids
+    ]
+    index = ((month - 1) * 30 + (day - 1)) % len(eligible_questions)
+    selected_question = dict(eligible_questions[index])
+    selected_question["difficulty"] = difficulty
+    return selected_question
 
 
 def generate_live_overtime_challenge(
-    current_ipc: Decimal,
     tna: Decimal,
     tem: Decimal,
     edesur_cost: Decimal,
@@ -224,7 +243,7 @@ def generate_live_overtime_challenge(
     gas_cost: Decimal,
     expensas_cost: Decimal,
     unworked_days: int,
-    daily_salary: Decimal = Decimal("40000.00")
+    daily_salary: Decimal = Decimal("66666.67")
 ) -> Dict[str, Any]:
     """Genera dinámicamente un desafío de Horas Extras con fórmulas matemáticas
     utilizando los datos reales y vigentes de la partida del jugador.
@@ -232,13 +251,11 @@ def generate_live_overtime_challenge(
     templates = [
         # Tipo 1: TEM desde TNA
         "tem_calculation",
-        # Tipo 2: Incremento de Servicios por IPC
-        "services_ipc_delta",
         # Tipo 3: Costo Total de Servicios Básicos
         "total_utilities",
         # Tipo 4: Descuento por ausencias
         "absence_discount",
-        # Tipo 5: Expensas indexadas
+        # Tipo 5: Costo mensual de expensas
         "expensas_calculation"
     ]
 
@@ -267,30 +284,6 @@ def generate_live_overtime_challenge(
 
         explanation = f"Correcto. TEM = {pct_tna}% / 12 = {correct_pct_tem}% mensual."
 
-    elif chosen_type == "services_ipc_delta":
-        total_utilities = edesur_cost + aysa_cost + gas_cost
-        delta_ipc = (current_ipc - Decimal("1.0000")).quantize(Decimal("0.0001"))
-        title = "Variación de Costos por Inflación (IPC)"
-        statement = (
-            f"Tus facturas de servicios públicos suman ${total_utilities:,.2f} al IPC actual de {current_ipc:.4f}x. "
-            f"Si la tarifa básica de luz (Edesur) cuesta ${edesur_cost:,.2f}, ¿cuánto representa exactamente "
-            f"el incremento de precios respecto a la base inicial de $45.000,00?"
-        )
-        base_edesur = Decimal("45000.00")
-        exact_increase = (edesur_cost - base_edesur).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        hint = "Fórmula: Incremento = Costo_Actual - Costo_Base"
-
-        correct_str = f"${exact_increase:,.2f}"
-        distractors = [
-            f"${(exact_increase * Decimal('1.25')).quantize(Decimal('0.01')):,.2f}",
-            f"${(exact_increase * Decimal('0.75')).quantize(Decimal('0.01')):,.2f}",
-            f"${(exact_increase + Decimal('5000.00')).quantize(Decimal('0.01')):,.2f}"
-        ]
-        options = [correct_str] + distractors
-        random.shuffle(options)
-        correct_idx = options.index(correct_str)
-        explanation = f"Correcto. El aumento nominal de Edesur es de ${exact_increase:,.2f}."
-
     elif chosen_type == "total_utilities":
         total_utilities = (edesur_cost + aysa_cost + gas_cost).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         title = "Gasto Consolidado en Servicios Públicos"
@@ -316,10 +309,10 @@ def generate_live_overtime_challenge(
         total_deduction = (Decimal(sample_absences) * daily_salary).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         title = "Descuento Salarial por Días No Trabajados"
         statement = (
-            f"El valor de tu jornada diaria de trabajo es de ${daily_salary:,.2f} (Salario base $1.200.000 / 30). "
+            f"El valor de tu jornada diaria de trabajo es de ${daily_salary:,.2f}. "
             f"Si un empleado computa {sample_absences} faltas en el mes, ¿cuánto se le descontará en su liquidación?"
         )
-        hint = "Fórmula: Descuento = Días_Ausentes * $40.000,00"
+        hint = "Fórmula: Descuento = Días_Ausentes * Salario_Diario"
         correct_str = f"${total_deduction:,.2f}"
         distractors = [
             f"${(total_deduction + Decimal('20000.00')):,.2f}",
@@ -333,14 +326,14 @@ def generate_live_overtime_challenge(
 
     else:
         # expensas_calculation
-        title = "Ajuste de Expensas por Inflación"
-        base_expensas = Decimal("90000.00")
+        title = "Presupuesto mensual de expensas"
+        base_expensas = expensas_cost
         statement = (
-            f"Las expensas base del edificio en Recoleta son de ${base_expensas:,.2f}. "
-            f"Con el IPC acumulado del mes en {current_ipc:.4f}x, ¿cuál es el valor liquidado a pagar?"
+            f"Las expensas mensuales del edificio en Recoleta son de ${base_expensas:,.2f}. "
+            f"¿Cuánto se reserva para cubrir seis meses?"
         )
-        hint = "Fórmula: Expensas_Actual = $90.000,00 * IPC"
-        exact_expensas = (base_expensas * current_ipc).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        hint = "Fórmula: Expensas_Mensuales * 6"
+        exact_expensas = (base_expensas * Decimal("6")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         correct_str = f"${exact_expensas:,.2f}"
         distractors = [
             f"${(exact_expensas + Decimal('7500.00')):,.2f}",
@@ -350,7 +343,7 @@ def generate_live_overtime_challenge(
         options = [correct_str] + distractors
         random.shuffle(options)
         correct_idx = options.index(correct_str)
-        explanation = f"Correcto. $90.000,00 * {current_ipc:.4f} = ${exact_expensas:,.2f}."
+        explanation = f"Correcto. ${base_expensas:,.2f} * 6 = ${exact_expensas:,.2f}."
 
     return {
         "title": title,
