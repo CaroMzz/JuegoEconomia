@@ -226,8 +226,9 @@ def create_app(test_config: dict = None) -> Flask:
 
     return app
 
+app = create_app()
+
 
 if __name__ == "__main__":
-    app = create_app()
     print("Iniciando Simulador Economico Web en http://localhost:5000 ...")
     app.run(host="0.0.0.0", port=5000, debug=True)
