@@ -25,7 +25,7 @@ class ConsumptionChoice:
     Aplica conceptos de Teoría del Consumidor:
     - Costo monetario (restricción presupuestaria)
     - Utilidad ordinal/cardinal asociada (preferencias del consumidor)
-    - Sensibilidad a la inflación (ajuste por IPC)
+    - Costos nominales constantes durante el semestre.
     """
     id: str
     category: Category
@@ -33,14 +33,11 @@ class ConsumptionChoice:
     description: str
     base_cost: Decimal
     utility: Decimal
-    is_subject_to_ipc: bool = True
 
-    def calculate_cost(self, ipc_index: Decimal) -> Decimal:
-        """Calcula el costo indexado por inflación al centavo exacto."""
-        if not self.is_subject_to_ipc:
-            return self.base_cost
-        from simulador.economy import apply_inflation
-        return apply_inflation(self.base_cost, ipc_index)
+    def calculate_cost(self) -> Decimal:
+        """Retorna el costo nominal al centavo."""
+        from simulador.economy import round_currency
+        return round_currency(self.base_cost)
 
 
 @dataclass(frozen=True)
@@ -48,14 +45,11 @@ class FixedCostItem:
     """Costo fijo mensual obligatorio del jugador."""
     name: str
     base_cost: Decimal
-    is_subject_to_ipc: bool = False
 
-    def calculate_cost(self, ipc_index: Decimal) -> Decimal:
-        """Calcula el costo del item fijo aplicando IPC si corresponde."""
-        if not self.is_subject_to_ipc:
-            return self.base_cost
-        from simulador.economy import apply_inflation
-        return apply_inflation(self.base_cost, ipc_index)
+    def calculate_cost(self) -> Decimal:
+        """Retorna el costo fijo nominal al centavo."""
+        from simulador.economy import round_currency
+        return round_currency(self.base_cost)
 
 
 @dataclass
@@ -67,8 +61,6 @@ class FinancialState:
     cumulative_utility: Decimal
     monthly_salary: Decimal
     tna: Decimal
-    ipc_index: Decimal
-
     @property
     def net_worth(self) -> Decimal:
         """Patrimonio neto = Efectivo disponible - Deuda acumulada."""
@@ -84,9 +76,9 @@ class UnforeseenEvent:
     base_cost: Decimal
     utility_impact: Decimal
 
-    def calculate_cost(self, ipc_index: Decimal) -> Decimal:
-        from simulador.economy import apply_inflation
-        return apply_inflation(self.base_cost, ipc_index)
+    def calculate_cost(self) -> Decimal:
+        from simulador.economy import round_currency
+        return round_currency(self.base_cost)
 
 
 @dataclass(frozen=True)
@@ -95,6 +87,7 @@ class MonthTurnResult:
     month: int
     starting_cash: Decimal
     salary_received: Decimal
+    debt_wellbeing_penalty: Decimal
     fixed_costs: Dict[str, Decimal]
     total_fixed_cost: Decimal
     selected_choices: List[ConsumptionChoice]
@@ -102,8 +95,6 @@ class MonthTurnResult:
     total_variable_cost: Decimal
     unforeseen_event: Optional[UnforeseenEvent]
     unforeseen_cost: Decimal
-    inflation_rate_turn: Decimal
-    ipc_index_turn: Decimal
     interest_applied: Decimal
     ending_cash: Decimal
     new_debt: Decimal

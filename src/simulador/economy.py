@@ -3,12 +3,23 @@ Utiliza Decimal con redondeo ROUND_HALF_UP para asegurar precisión financiera a
 """
 
 from decimal import Decimal, ROUND_HALF_UP
-import random
-from typing import Optional, Tuple
+from typing import Tuple
 
 CENT = Decimal("0.01")
 RATE_PRECISION = Decimal("0.000001")
-IPC_PRECISION = Decimal("0.0001")
+WELLBEING_PRECISION = Decimal("0.1")
+INITIAL_WELLBEING = Decimal("300.0")
+ABSENCE_WELLBEING_PENALTY = Decimal("6.0")
+DAILY_WELLBEING_GAIN_LIMIT = Decimal("5.0")
+DEBT_WELLBEING_PENALTY_PER_100K = Decimal("20.0")
+MAX_DEBT_WELLBEING_PENALTY = Decimal("120.0")
+BASE_RENT_RECOLETA = Decimal("850000.00")
+BASE_EXPENSES = Decimal("140000.00")
+BASE_EDESUR = Decimal("55000.00")
+BASE_AYSA = Decimal("25000.00")
+BASE_GAS = Decimal("20000.00")
+BASE_GYM = Decimal("65000.00")
+BASE_GROCERIES = Decimal("250000.00")
 
 
 def round_currency(value: Decimal) -> Decimal:
@@ -55,72 +66,33 @@ def apply_debt_interest(debt: Decimal, tem: Decimal) -> Tuple[Decimal, Decimal]:
     return interest, total_debt
 
 
-def apply_inflation(base_amount: Decimal, ipc_index: Decimal) -> Decimal:
-    """Ajusta un precio base por el Índice de Precios al Consumidor (IPC).
-    
-    Fórmula:
-        Precio_Ajustado = Base * IPC
-    Redondeado al centavo exacto.
-    """
-    if base_amount < Decimal("0.00"):
-        raise ValueError("El monto base no puede ser negativo.")
-    if ipc_index < Decimal("0.0000"):
-        raise ValueError("El IPC no puede ser negativo.")
-    return round_currency(base_amount * ipc_index)
+def apply_wellbeing_change(
+    current_wellbeing: Decimal,
+    change: Decimal
+) -> Tuple[Decimal, Decimal]:
+    """Aplica un cambio de bienestar y devuelve el nuevo nivel y el cambio efectivo."""
+    updated = max(Decimal("0.0"), current_wellbeing + change)
+    updated = updated.quantize(WELLBEING_PRECISION, rounding=ROUND_HALF_UP)
+    return updated, updated - current_wellbeing
 
 
-class MacroEconomyEngine:
-    """Motor de simulación macroeconómica: gestiona inflación acumulada e IPC."""
+def limit_daily_wellbeing_gain(
+    requested_gain: Decimal,
+    gain_already_earned: Decimal
+) -> Decimal:
+    """Limita los puntos positivos que se pueden acumular en una jornada."""
+    if requested_gain <= Decimal("0.0"):
+        return requested_gain
+    remaining = max(Decimal("0.0"), DAILY_WELLBEING_GAIN_LIMIT - gain_already_earned)
+    return min(requested_gain, remaining)
 
-    def __init__(
-        self,
-        base_monthly_inflation: Decimal = Decimal("0.0350"),  # 3.5% mensual basal
-        shock_month: Optional[int] = None,
-        shock_rate: Optional[Decimal] = None,
-        seed: Optional[int] = None
-    ) -> None:
-        self.base_monthly_inflation = base_monthly_inflation
-        self.rng = random.Random(seed)
-        # Si no se especifica, el shock ocurre aleatoriamente en el mes 3 o 4
-        self.shock_month = shock_month if shock_month is not None else self.rng.choice([3, 4])
-        # Magnitud del shock aleatorio entre 10% y 18% si no está definido
-        if shock_rate is not None:
-            self.shock_rate = shock_rate
-        else:
-            random_pct = self.rng.randint(100, 180) / 1000.0  # 0.10 a 0.18
-            self.shock_rate = Decimal(str(round(random_pct, 4)))
 
-        self.current_ipc = Decimal("1.0000")
-        self.history: list[dict[str, Decimal]] = []
-
-    def get_monthly_inflation_rate(self, month: int) -> Decimal:
-        """Determina la tasa de inflación para un mes específico."""
-        if month == 1:
-            return Decimal("0.0000")  # Mes 1 es la base (IPC = 1.0)
-        if month == self.shock_month:
-            # En el mes del shock se suma el salto inflacionario al ritmo base
-            return (self.base_monthly_inflation + self.shock_rate).quantize(
-                RATE_PRECISION, rounding=ROUND_HALF_UP
-            )
-        return self.base_monthly_inflation.quantize(RATE_PRECISION, rounding=ROUND_HALF_UP)
-
-    def advance_month(self, month: int) -> Tuple[Decimal, Decimal]:
-        """Avanza al mes indicado y actualiza el IPC acumulado.
-        
-        Retorna:
-            (tasa_inflacion_mes, nuevo_ipc)
-        """
-        inflation_rate = self.get_monthly_inflation_rate(month)
-        if month == 1:
-            self.current_ipc = Decimal("1.0000")
-        else:
-            self.current_ipc = (self.current_ipc * (Decimal("1.0") + inflation_rate)).quantize(
-                IPC_PRECISION, rounding=ROUND_HALF_UP
-            )
-        
-        self.history.append({
-            "month": Decimal(month),
-            "rate": inflation_rate,
-            "ipc": self.current_ipc
-        })
-        return inflation_rate, self.current_ipc
+def calculate_debt_wellbeing_penalty(debt: Decimal) -> Decimal:
+    """Penaliza el estrés financiero: 20 puntos por cada $100.000, hasta 120."""
+    if debt <= Decimal("0.00"):
+        return Decimal("0.0")
+    penalty = min(
+        debt / Decimal("100000.00") * DEBT_WELLBEING_PENALTY_PER_100K,
+        MAX_DEBT_WELLBEING_PENALTY
+    )
+    return -penalty.quantize(WELLBEING_PRECISION, rounding=ROUND_HALF_UP)

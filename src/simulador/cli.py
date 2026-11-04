@@ -1,5 +1,5 @@
 """Interfaz de Terminal (CLI) con formato visual avanzado utilizando Rich.
-Presenta paneles económicos, alertas de inflación, selección de alternativas
+Presenta paneles económicos, selección de alternativas
 de consumo y reportes mensuales con pedagogía económica.
 """
 
@@ -51,7 +51,7 @@ class EconomicCliApp:
         welcome_text.append("¡Bienvenido al Simulador de Supervivencia Económica!\n", style="bold yellow")
         welcome_text.append(
             "Durante 6 meses deberás administrar tu presupuesto en la Ciudad de Buenos Aires (Recoleta).\n"
-            "Aplicarás Teoría del Consumidor, evaluarás el Efecto Sustitución y navegarás shocks macroeconómicos.\n\n",
+            "Aplicarás Teoría del Consumidor y evaluarás el Efecto Sustitución con precios estables.\n\n",
             style="white"
         )
         welcome_text.append("• Restricción Presupuestaria: ", style="bold cyan")
@@ -65,16 +65,16 @@ class EconomicCliApp:
         welcome_text.append("• Objetivo: ", style="bold green")
         welcome_text.append("Maximizar tu Bienestar/Utilidad total sin caer en insolvencia irreversible.\n")
 
-        self.console.print(Panel(welcome_text, title="📊 SIMULADOR ECONÓMICO CLI", border_style="bright_blue"))
+        self.console.print(Panel(welcome_text, title=" SIMULADOR ECONÓMICO CLI", border_style="bright_blue"))
 
     def render_dashboard(self) -> None:
         """Renderiza el tablero de control del estado actual."""
         state = self.game.state
-        table = Table(title=f"📅 TABLERO DE CONTROL - MES {state.month} DE 6", expand=True)
+        table = Table(title=f" TABLERO DE CONTROL - MES {state.month} DE 6", expand=True)
         table.add_column("Salario Mensual", style="bold green", justify="center")
         table.add_column("Ahorros Previos", style="green", justify="center")
         table.add_column("Deuda Bancaria", style="red", justify="center")
-        table.add_column("IPC Acumulado", style="yellow", justify="center")
+        table.add_column("Bienestar", style="magenta", justify="center")
         table.add_column("Utilidad Acumulada", style="magenta", justify="center")
 
         debt_style = "bold red" if state.debt > Decimal("0.00") else "dim white"
@@ -82,7 +82,6 @@ class EconomicCliApp:
             format_currency(state.monthly_salary),
             format_currency(state.cash),
             f"[{debt_style}]{format_currency(state.debt)}[/{debt_style}]",
-            f"{state.ipc_index:.4f}x",
             f"{state.cumulative_utility:.1f} pts"
         )
         self.console.print(table)
@@ -90,12 +89,10 @@ class EconomicCliApp:
     def prompt_user_choices(self) -> List[ConsumptionChoice]:
         """Solicita interactivamente al usuario sus decisiones de consumo para cada categoría."""
         selected_choices: List[ConsumptionChoice] = []
-        ipc = self.game.state.ipc_index
-
         for category, options in self.game.catalog.items():
             self.console.print(f"\n[bold underline]{category.value}[/bold underline]:")
             for idx, opt in enumerate(options, 1):
-                effective_cost = opt.calculate_cost(ipc)
+                effective_cost = opt.calculate_cost()
                 self.console.print(
                     f"  [bold cyan]({idx})[/bold cyan] {opt.name} "
                     f"-> [bold green]{format_currency(effective_cost)}[/bold green] "
@@ -118,39 +115,28 @@ class EconomicCliApp:
 
     def render_turn_result(self, result: MonthTurnResult) -> None:
         """Muestra el balance detallado del mes finalizado."""
-        # Alerta de shock inflacionario si ocurrió este mes
-        if result.inflation_rate_turn > self.game.macro_engine.base_monthly_inflation:
-            shock_pct = result.inflation_rate_turn * 100
-            self.console.print(Panel(
-                f"🚨 [bold red]¡SHOCK MACROECONÓMICO DETECTADO![/bold red]\n"
-                f"El IPC sufrió un salto del [bold yellow]{shock_pct:.2f}%[/bold yellow] este mes.\n"
-                f"Los precios de la canasta básica, servicios y gimnasio aumentaron inmediatamente.",
-                title="📈 ALERTA DE INFLACIÓN (IPC)",
-                border_style="red"
-            ))
-
         # Alerta de intereses si hubo deuda
         if result.interest_applied > Decimal("0.00"):
             self.console.print(Panel(
-                f"⚠️ [bold red]COSTO FINANCIERO DE LA DEUDA:[/bold red]\n"
+                f" [bold red]COSTO FINANCIERO DE LA DEUDA:[/bold red]\n"
                 f"Se debitaron [bold yellow]{format_currency(result.interest_applied)}[/bold yellow] de intereses "
                 f"(TEM: {self.game.tem * 100:.2f}%, TNA: {self.game.tna * 100:.1f}%, TEA: {self.game.tea * 100:.2f}%).",
-                title="💳 LIQUIDACIÓN BANCARIA",
+                title=" LIQUIDACIÓN BANCARIA",
                 border_style="dark_orange"
             ))
 
         # Alerta de evento imprevisto
         if result.unforeseen_event:
             self.console.print(Panel(
-                f"🐾 [bold yellow]{result.unforeseen_event.title}[/bold yellow]\n"
+                f" [bold yellow]{result.unforeseen_event.title}[/bold yellow]\n"
                 f"{result.unforeseen_event.description}\n"
                 f"Costo abonado: [bold red]{format_currency(result.unforeseen_cost)}[/bold red]",
-                title="⚡ GASTO IMPREVISTO (MASCOTAS)",
+                title=" GASTO IMPREVISTO (MASCOTAS)",
                 border_style="yellow"
             ))
 
         # Tabla de resumen financiero del mes
-        table = Table(title=f"📋 LIQUIDACIÓN MENSUAL - CIERRE MES {result.month}", expand=True)
+        table = Table(title=f" LIQUIDACIÓN MENSUAL - CIERRE MES {result.month}", expand=True)
         table.add_column("Concepto", style="cyan")
         table.add_column("Monto / Detalle", justify="right")
 
@@ -165,7 +151,12 @@ class EconomicCliApp:
         table.add_section()
         table.add_row("Efectivo Final al Cierre", f"[bold green]{format_currency(result.ending_cash)}[/bold green]")
         table.add_row("Deuda Remanente / Préstamo Activo", f"[bold red]{format_currency(result.new_debt)}[/bold red]")
-        table.add_row("Utilidad Obtenida en el Turno", f"[magenta]+{result.utility_gained:.1f} pts[/magenta]")
+        table.add_row("Cambio de Bienestar del Turno", f"[magenta]{result.utility_gained:+.1f} pts[/magenta]")
+        if result.debt_wellbeing_penalty < Decimal("0.0"):
+            table.add_row(
+                "Penalidad de bienestar por deuda",
+                f"[red]{result.debt_wellbeing_penalty:.1f} pts[/red]"
+            )
         table.add_row("Utilidad Acumulada", f"[bold magenta]{result.cumulative_utility:.1f} pts[/bold magenta]")
 
         self.console.print(table)
@@ -174,7 +165,7 @@ class EconomicCliApp:
         """Genera el informe final del tutor de economía y evaluación de resultados."""
         final_state = self.game.state
         summary = Text()
-        summary.append("🎓 EVALUACIÓN FINAL DEL TUTOR DE ECONOMÍA\n\n", style="bold yellow")
+        summary.append(" EVALUACIÓN FINAL DEL TUTOR DE ECONOMÍA\n\n", style="bold yellow")
 
         if final_state.debt == Decimal("0.00") and final_state.cash >= Decimal("0.00"):
             summary.append("¡SUPERVIVENCIA EXITOSA!\n", style="bold green")
@@ -194,9 +185,8 @@ class EconomicCliApp:
         summary.append(f"• Deuda Final: {format_currency(final_state.debt)}\n")
         summary.append(f"• Patrimonio Neto Final: {format_currency(final_state.net_worth)}\n")
         summary.append(f"• Utilidad Total Acumulada: {final_state.cumulative_utility:.1f} puntos de bienestar\n")
-        summary.append(f"• IPC Final tras 6 meses: {final_state.ipc_index:.4f}x\n")
 
-        self.console.print(Panel(summary, title="🏁 FIN DE LA SIMULACIÓN DE 6 MESES", border_style="bright_magenta"))
+        self.console.print(Panel(summary, title=" FIN DE LA SIMULACIÓN DE 6 MESES", border_style="bright_magenta"))
 
     def run(self) -> None:
         """Bucle principal de ejecución de los 6 meses."""

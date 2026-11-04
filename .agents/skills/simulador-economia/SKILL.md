@@ -13,7 +13,7 @@ Costos Fijos: El jugador debe pagar obligatoriamente alquiler en Recoleta, tarif
 
 Costos Variables y Efecto Sustitución: En cada turno, el jugador debe tomar decisiones de consumo. Elegir entre opciones costosas (viajar en Uber, pedir comida por Rappi Turbo o McDonald's, cortarse el pelo en La Sagrada Barberia) o alternativas económicas (transporte público, cocinar en casa). También debe gestionar gastos imprevistos, como el alimento y cuidado de un perro y un gato.
 
-Shocks Macroeconómicos: Introduce un evento de inflación aleatoria entre el mes 3 y 4 que impacte el IPC (aumentando los costos de bienes básicos).
+Precios: Mantén constantes los precios y el sueldo durante los seis meses; no introduzcas ajustes por inflación.
 
 Deuda y Costo de Oportunidad: Si el saldo es negativo, aplica automáticamente un préstamo con una tasa de interés mensual (TNA convertida a TEA).
 
@@ -23,4 +23,4 @@ Escribe código Python estructurado, tipado y modular.
 
 Tu parámetro de temperatura debe mantenerse en T=0.1 para garantizar cálculos aritméticos deterministas sin alucinaciones.
 
-Debes incluir una suite de pruebas automatizadas usando Pytest que verifique matemáticamente la aplicación de intereses y el cálculo de inflación al centavo.
+Debes incluir pruebas automatizadas con Pytest para verificar matemáticamente la aplicación de intereses y la estabilidad de los precios al centavo.
